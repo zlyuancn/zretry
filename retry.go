@@ -9,73 +9,82 @@
 package zretry
 
 import (
-    "time"
+	"time"
 )
 
 type Retry struct {
-    interval     time.Duration
-    attemptCount int32
-    errCallFun   ErrCallbackFunc
+	interval     time.Duration
+	attemptCount int
+	errCallFun   ErrCallbackFunc
 }
 
 type Option func(*Retry)
 
 type DoFun func() error
-type ErrCallbackFunc func(err error)
 
-//创建一个重试器
+/*回调函数
+  nowAttemptCount 当前尝试次数
+  remainCount 剩余次数
+  err 错误
+*/
+type ErrCallbackFunc func(nowAttemptCount, remainCount int, err error)
+
+// 创建一个重试器
 func NewRetry(options ...Option) *Retry {
-    r := &Retry{}
-    for _, o := range options {
-        o(r)
-    }
-    return r
+	r := &Retry{}
+	for _, o := range options {
+		o(r)
+	}
+	return r
 }
 
 // 设置间隔时间
 func WithInterval(interval time.Duration) Option {
-    return func(retry *Retry) {
-        retry.interval = interval
-    }
+	return func(retry *Retry) {
+		retry.interval = interval
+	}
 }
 
 // 设置最大尝试次数, 0为不限次数
-func WithAttemptCount(attemptCount int32) Option {
-    return func(retry *Retry) {
-        retry.attemptCount = attemptCount
-    }
+func WithAttemptCount(attemptCount int) Option {
+	return func(retry *Retry) {
+		retry.attemptCount = attemptCount
+	}
 }
 
 // 设置错误回调函数, 每次执行时有任何错误都会报告给该函数
 func WithErrCallback(errfn ErrCallbackFunc) Option {
-    return func(retry *Retry) {
-        retry.errCallFun = errfn
-    }
+	return func(retry *Retry) {
+		retry.errCallFun = errfn
+	}
 }
 
 // 执行一个函数
 func (m *Retry) Do(f DoFun) (err error) {
-    return DoRetry(f, m.interval, m.attemptCount, m.errCallFun)
+	return DoRetry(f, m.interval, m.attemptCount, m.errCallFun)
 }
 
-//执行一个函数
-func DoRetry(f DoFun, interval time.Duration, attemptCount int32, errCallFun ErrCallbackFunc) (err error) {
-    for {
-        err = f()
-        if err == nil {
-            return
-        } else if errCallFun != nil {
-            errCallFun(err)
-        }
+// 执行一个函数
+func DoRetry(f DoFun, interval time.Duration, attemptCount int, errCallFun ErrCallbackFunc) (err error) {
+	nowAttemptCount := 0
+	for {
+		nowAttemptCount++
 
-        attemptCount--
-        if attemptCount == 0 {
-            break
-        }
+		err = f()
+		if err == nil {
+			return
+		}
+		if errCallFun != nil {
+			errCallFun(nowAttemptCount, attemptCount, err)
+		}
 
-        if interval > 0 {
-            time.Sleep(interval)
-        }
-    }
-    return
+		if attemptCount >= nowAttemptCount {
+			break
+		}
+
+		if interval > 0 {
+			time.Sleep(interval)
+		}
+	}
+	return
 }
