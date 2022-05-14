@@ -13,8 +13,8 @@ import (
 )
 
 type Retry struct {
-	interval     time.Duration
 	attemptCount int
+	interval     time.Duration
 	errCallFun   ErrCallbackFunc
 }
 
@@ -61,11 +61,11 @@ func WithErrCallback(errfn ErrCallbackFunc) Option {
 
 // 执行一个函数
 func (m *Retry) Do(f DoFun) (err error) {
-	return DoRetry(f, m.interval, m.attemptCount, m.errCallFun)
+	return DoRetry(m.attemptCount, m.interval, f, m.errCallFun)
 }
 
 // 执行一个函数
-func DoRetry(f DoFun, interval time.Duration, attemptCount int, errCallFun ErrCallbackFunc) (err error) {
+func DoRetry(attemptCount int, interval time.Duration, f DoFun, errCallFun ErrCallbackFunc) (err error) {
 	nowAttemptCount := 0
 	for {
 		nowAttemptCount++
@@ -75,10 +75,10 @@ func DoRetry(f DoFun, interval time.Duration, attemptCount int, errCallFun ErrCa
 			return
 		}
 		if errCallFun != nil {
-			errCallFun(nowAttemptCount, attemptCount, err)
+			errCallFun(nowAttemptCount, attemptCount-nowAttemptCount, err)
 		}
 
-		if attemptCount >= nowAttemptCount {
+		if nowAttemptCount >= attemptCount {
 			break
 		}
 
